@@ -38,8 +38,9 @@ SCREEN_HEIGHT = 1200
 SCREEN_TITLE = "Jake's Platformer"
 
 # Set default textures
-TEXTURE_RIGHT = 1
 TEXTURE_LEFT = 0
+TEXTURE_RIGHT = 1
+
 
 
 
@@ -54,6 +55,7 @@ GYARADOS_SCALING = 0.1
 
 # Set the speed at which the character increments
 ORGANISM_MEAN_MOVEMENT_SPEED = 20
+JUMP_SPEED = 15
 ENEMY_MOVEMENT_SPEED = 1
 
 # Controls how fast the character returns to the ground after jumping or "flying" (i.e. traveling upward at a rate)
@@ -217,7 +219,7 @@ class MyGame(arcade.Window):
 
 		# Used to keep track of our scrolling
 		self.view_bottom = 0
-		self.view_left = 0
+		self.view_left = -100
 
 		 # Sets the background color--there are lots of options available through the arcade site
 		arcade.set_background_color((0, 0, 0))
@@ -240,7 +242,8 @@ class MyGame(arcade.Window):
 		# Represents the end of the level--Darwin/a flag goes here!
 		self.end_of_level = 1200
 
-
+		# A switch to use to position all sprites in their proper places just ONCE
+		self.sprites_positioned = False
 
 		######## REDEFINE ALL IMPORTANT LISTS AS SPRITELISTS #######
 
@@ -916,48 +919,55 @@ class MyGame(arcade.Window):
 		for i in self.experimental_list:
 			i.physics_engine = arcade.PhysicsEnginePlatformer(i, self.wall_list, GRAVITY)
 			self.player_physics_engines_list.append(i.physics_engine)
+			i.physics_engine.can_jump()
 
 
         # Check to see which starter was chosen and change textures
-		for i in self.histogram_list:
+		for i in self.experimental_list:
 
 			# Gives the histogram column in which this organism resides; defaults to zero
 			i.column = 0
             # If starter is bulbasaur, give bulbasaur textures
 			if self.starter_string == "bulbasaur":
             	# Append left image
-				texture = arcade.load_texture("images/bulbasaur_left.png")
+				texture = arcade.load_texture("images/bulbasaur_left.png", scale = i.scale)
 				i.textures.append(texture)
 
 				# Append right image
-				texture = arcade.load_texture("images/bulbasaur_right.png")
+				texture = arcade.load_texture("images/bulbasaur_right.png", scale = i.scale)
 				i.textures.append(texture)
 				print("We're bulbasaurs with our textures appended!")
 
 			# If starter is charmander, give charmander textures
 			elif self.starter_string == "charmander":
 				# Append left image
-				texture = arcade.load_texture("images/charmander_left.png")
+				texture = arcade.load_texture("images/charmander_left.png", scale = i.scale)
 				i.textures.append(texture)
 
 				# Append right image
-				texture = arcade.load_texture("images/charmander_right.png")
+				texture = arcade.load_texture("images/charmander_right.png", scale = i.scale)
 				i.textures.append(texture)
 				print("We're charmanders with our textures appended!")
 
             # If starter is squirtle, give squirtle textures
 			elif self.starter_string == "squirtle":
 				# Append left image
-				texture = arcade.load_texture("images/squirtle_left.png")
+				texture = arcade.load_texture("images/squirtle_left.png", i.scale)
 				i.textures.append(texture)
 
 				# Append right image
-				texture = arcade.load_texture("images/squirtle_right.png")
+				texture = arcade.load_texture("images/squirtle_right.png", i.scale)
 				i.textures.append(texture)
 				print("We're squirtles with our textures appended!")
 
 
 
+			# Look right by default
+			#i.set_texture(TEXTURE_RIGHT)
+			
+			# Set all the textures to be equal in scale to the characters
+			for texture in i.textures:
+				texture.scale = i.scale
 
 			# Establishes that the organism, by default, isn't dead
 			i.dead = False
@@ -965,7 +975,14 @@ class MyGame(arcade.Window):
 
 	def position_player_sprites_in_game(self):
 		for i in self.player_list:
-			i.center_x = 0
+			# If this organism isn't the focus, make it semi-transparent
+			if i != self.focal_organism:
+				i.alpha = 50
+			# Place them at "zero"
+			i.center_x = 100
+
+
+
 
 ############## DEFINE_ALL_TEN_SPRITES METHOD HAS BEEN CLEANED #############
 
@@ -974,6 +991,11 @@ class MyGame(arcade.Window):
 	def scale_everyone(self):
 
 		if self.starter_string:
+
+			# Set all textures equal to the player's scale
+			for i in self.player_list:
+				for texture in i.textures:
+					texture.scale = i.scale
 			
 			# Establish which type of scaling is appropriate by checking the starter string...
 			# ...and retrieving the right scale
@@ -1036,6 +1058,9 @@ class MyGame(arcade.Window):
 			for org in self.experimental_list:
 				for texture in org.textures:
 					texture.scale = org.scale
+					print("Org vs texture:", org.scale, texture.scale)
+
+
 	        
 	        # If the scale goes below zero, change it to something teensy but positive
 			for i in range(len(self.experimental_list)-1):
@@ -1168,7 +1193,7 @@ class MyGame(arcade.Window):
 		elif self.current_state >= 7:
 			self.darwin_sprite.center_x = self.end_of_level
 			self.darwin_sprite.center_y = self.hist_floor
-			print("we made it here")
+			
 
 		# Draws Darwin
 		# Note:  This will conflict with any fade-in/fade-out effects
@@ -1692,18 +1717,74 @@ class MyGame(arcade.Window):
 		self.organism_var10_sprite.center_x = base_x + 405
 		self.organism_var10_sprite.column = 10
 
+
 	def draw_choosable_histogram(self):
         # Assign positions to (and draws) histogram characters
 		for i in self.histogram_list:
 			i.center_x -= 140
 			i.fading_in = True
 			i.fading_out = False
-			
+			# Scale all textures to be equal to the character
+			for texture in i.textures:
+				texture.scale = i.scale
+			# Set all images to face left by default in the histogram
+			i.set_texture(TEXTURE_LEFT)
+
 			if self.column_choice == 0:
 				i.draw()
 			elif self.column_choice > 0:
 				if i.column == self.column_choice:
+					# Set this organism as the focal organism
 					i.draw()
+
+		# Based on its position, this is a great moment to give these guys their extra textures
+		#### COMMENTED-OUT BECAUSE THIS PROBABLY BELONGS IN DEFINITION METHOD ######
+
+		"""
+		for i in self.experimental_list:
+			# Check to see if the sprite has a textures list, and if it doesn't, make one
+			if not i.textures:
+				i.textures = []
+
+			# Check to see if this sprite already has its textures
+			if len(i.textures) < 2:
+				# If the selected pokemon was bulbasaur, load textures
+				if self.starter_string == "bulbasaur":
+					# Load the left texture
+					texture = arcade.load_texture("images/bulbasaur_left.png", i.scale)
+					# Add it to the list
+					i.textures.append(texture)
+
+					# Load the right texture
+					texture = arcade.load_texture("images/bulbasaur_right.png", i.scale)
+					# Add it to the list
+					i.textures.append(texture)
+				
+				# Do the same for charmander
+				elif self.starter_string == "charmander":
+					# Load the left texture
+					texture = arcade.load_texture("images/charmander_left.png", i.scale)
+					# Add it to the list
+					i.textures.append(texture)
+
+					# Load the right texture
+					texture = arcade.load_texture("images/charmander_right.png", i.scale)
+					# Add it to the list
+					i.textures.append(texture)
+
+				# Do the same for squirtle
+				elif self.starter_string == "squirtle":
+					# Load the left texture
+					texture = arcade.load_texture("images/squirtle_left.png", i.scale)
+					# Add it to the list
+					i.textures.append(texture)
+
+					# Load the right texture
+					texture = arcade.load_texture("images/squirtle_right.png", i.scale)
+					# Add it to the list
+					i.textures.append(texture)
+					"""
+
 
 	# Gives a scaling update based on the pokemon chosen
 	def update_scaling(self, starter_string):
@@ -1892,7 +1973,13 @@ class MyGame(arcade.Window):
 			self.increment_scene()
 
 		if self.start_game == True:
+			if self.column_choice:
+				for org in self.player_list:
+					if org.column == self.column_choice:
+						self.focal_organism = org
+			
 			self.draw_game()
+
 			
 
 
@@ -1981,6 +2068,11 @@ class MyGame(arcade.Window):
 
 						# Sets the player's choice equal to the column the organism is in
 						self.column_choice = i.column
+
+						# Sets up the focal organism for later use
+						for org in self.player_list:
+							if self.column_choice == org.column:
+								self.focal_organism = org
 						print("Picked a focus!")
 
 
@@ -2020,25 +2112,101 @@ class MyGame(arcade.Window):
 			# When the "down" key is pressed
 			if key == arcade.key.DOWN or key == arcade.key.S:
 				# Go down (if applicable) at a speed equal to the constant set at the beginning
+				# Check all organisms
 				for org in self.player_list:
 					org.change_y = -int(ORGANISM_MEAN_MOVEMENT_SPEED)
 
+########### FOR IN-GAME CONTROL ##############
+
+			if key == arcade.key.UP or key == arcade.key.W:
+				for org in self.player_list:
+					if org.physics_engine.can_jump():
+						org.change_y = int(JUMP_SPEED)
+
 			# When the left key is pressed
 			if key == arcade.key.LEFT or key == arcade.key.A:
+				# Check all organisms
 				for org in self.player_list:
+					org.set_texture(TEXTURE_LEFT+1)
 					# Go right at a speed equal to the constant set at the beginning
 					org.change_x = -int(ORGANISM_MEAN_MOVEMENT_SPEED)
-					org.set_texture(TEXTURE_LEFT)
+					
 
 			# When the right key is pressed
 			if key == arcade.key.RIGHT or key == arcade.key.D:
-				self.organism_var5_sprite.set_texture(1)
+				# Check all organisms
 				for org in self.player_list:
+					org.set_texture(TEXTURE_RIGHT+1)
 					# Go right at a speed equal to the constant set at the beginning
 					org.change_x = int(ORGANISM_MEAN_MOVEMENT_SPEED)
-					#org.set_texture(TEXTURE_RIGHT)
 
 
+			# Only change if we've not beaten the level
+			if self.level_complete == False:
+				# Track if we need to change the viewport
+				changed = False
+
+				### NOTE: ALL OF THIS IS CURRENTLY WORKING CORRECTLY, BUT SOMETHING'S WRONG WITH WINDOW SIZING; FIX THIS TO MAKE SCROLLING WORK PROPERLY ###
+				# Solved the above by inreasing the right viewport margin (in "constants" section above initializer)
+
+				# Scroll left
+				left_boundary = self.view_left + LEFT_VIEWPORT_MARGIN
+				if self.focal_organism.left < left_boundary:
+					self.view_left -= left_boundary - self.focal_organism.left
+					changed = True
+
+				# Scroll right
+				right_boundary = self.view_left + SCREEN_WIDTH - RIGHT_VIEWPORT_MARGIN
+				if (self.focal_organism.right) > right_boundary:
+					self.view_left += self.focal_organism.right - right_boundary
+					changed = True
+
+	            # Scroll up
+				top_boundary = self.view_bottom + SCREEN_HEIGHT - TOP_VIEWPORT_MARGIN
+				if self.focal_organism.top > top_boundary:
+					self.view_bottom += self.focal_organism.top - top_boundary
+					changed = True
+
+				# Scroll down
+				bottom_boundary = self.view_bottom + BOTTOM_VIEWPORT_MARGIN
+				if self.focal_organism.bottom < bottom_boundary:
+					self.view_bottom -= bottom_boundary - self.focal_organism.bottom
+					changed = True
+
+				if changed:
+					# Only scroll to integers--otherwise we end up with pixels
+					# that don't line up on the screen
+					self.view_bottom = int(self.view_bottom)
+					self.view_left = int(self.view_left)
+
+					# Do the scrolling
+					arcade.set_viewport(self.view_left,
+										SCREEN_WIDTH + self.view_left,
+										self.view_bottom,
+										SCREEN_HEIGHT + self.view_bottom)
+					
+
+
+	def on_key_release(self, key, modifiers):
+		""" Called whenever a key is pressed. """
+
+		if key == arcade.key.UP or key == arcade.key.W:
+			for org in self.player_list:
+				org.change_y = 0
+
+		if key == arcade.key.DOWN or key == arcade.key.S:
+			for org in self.player_list:
+				org.change_y = 0
+
+
+		if key == arcade.key.LEFT or key == arcade.key.A:
+			for org in self.player_list:
+				org.change_x = 0
+
+
+		if key == arcade.key.RIGHT or key == arcade.key.D:
+			for org in self.player_list:
+				org.change_x = 0
 
 
 
@@ -2048,6 +2216,11 @@ class MyGame(arcade.Window):
         # Restart the rendering process
 		arcade.start_render()
 
+		# Check to see if the noteworthy (player, enemy) sprites have been given an initial position
+		# If they haven't, give them one!
+		if self.sprites_positioned == False:
+			#self.position_player_sprites_in_game()
+			self.sprites_positioned = True
 		# Uses "current music" as a switch to check and see if you're already playing game music
 		# If you aren't, play it.  If you aren't, don't do anything.
 		# Also, don't play music if the level is over.
@@ -2059,8 +2232,10 @@ class MyGame(arcade.Window):
 		    # Load the game music
 		    mixer.music.load(self.game_music)
 
+########### TURN MUSIC BACK ON AFTER DEBUGGING IS COMPLETE ##########
+
 		    # Play the music on repeat
-		    mixer.music.play(-1)
+		    #mixer.music.play(-1)
 
 		    # First thing we do in game is set the background color
 		    arcade.set_background_color((230, 143, 255))
@@ -2095,14 +2270,7 @@ class MyGame(arcade.Window):
 		# Draw darwin (he's the flag at the end)
 		self.darwin_list.draw()
 
-		# Checks to see if you're extinct
-		if self.extinction:
-			# Creates text that indicates Extinction
-			extinction_text = f"EXTINCTION!"
 
-			# Draws extinction text
-			arcade.draw_text(extinction_text, 100 + self.view_left, 300 + self.view_bottom, 
- 				arcade.csscolor.WHITE, 60)
 
 		if self.making_histogram == True:
 		    
@@ -2121,36 +2289,6 @@ class MyGame(arcade.Window):
 				self.hist_coords_given = True
 
 
-			for i in self.experimental_list:
-				i.point = ""
-				i.paired_x = False
-				i.paired_y = False
-				i.faded_in = False
-				i.mating_point = False
-				i.i_am_focal = False
-				i.draw()
-		    
-		    
-
-		    
-			self.calculate_losses()
-
-		    
-			if self.selection_calculated == False:
-				
-				self.get_change_after_selection()
-				self.selection_calculated = True
-
-
-			if self.prof_oak_key_pressed_1 == True:
-		            
-				self.prof_oak_dialogue = True
-				if self.prof_oak_dialogue == True:
-					self.draw_prof_oak()
-					for message in self.oak4_list:
-						self.position_oak_text(message)
-		            
-		    
 		    
 			if self.level_complete and self.go_to_next_level:
 		        
@@ -2160,13 +2298,14 @@ class MyGame(arcade.Window):
 
 	def update(self, delta_time):
 		# Update all players first
-		for player_engine in self.player_physics_engines_list:
-			player_engine.update()
+		if self.current_state == 7:
+			for player_engine in self.player_physics_engines_list:
+				player_engine.update()
 
-		# Update all physics lists at once, but only if in stage 4 or later
-		#if self.current_state >= 4:
-			#for engine in self.master_physics_engine_list:
-				#engine.update()
+
+
+
+
 
 # Main method of the game; calls set-up initially 
 # Call set-up again to run another level
