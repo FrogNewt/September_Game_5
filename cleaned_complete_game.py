@@ -30,7 +30,7 @@ scale_dict = {
 }
 
 # Sets a scalar constant for variance (otherwise, characters get too big/small)
-var_scalar = 0.01
+var_scalar = 0.03
 
 # Constants for screen
 SCREEN_WIDTH = 1500
@@ -71,6 +71,17 @@ BOTTOM_VIEWPORT_MARGIN = 100
 TOP_VIEWPORT_MARGIN = 350
 
 
+
+# Keep a dictionary of all the stages/progression of the game
+
+stage_dict = {
+	'0' : "PREOPENING",
+	'1' : "OPENING",
+	'2' : "OPENING_RUNNING"
+}
+
+
+
 class MyGame(arcade.Window):
 	"""
 	Main application class.
@@ -89,6 +100,7 @@ class MyGame(arcade.Window):
 		self.darwin_list = None
 		self.enemy_list = None
 		self.starters_list = None
+		self.master_sprite_list = None
 
 		# A series of switches that allow for transition between phases at the beginning
 		# of the game
@@ -106,6 +118,9 @@ class MyGame(arcade.Window):
 		self.game_music = 'sounds/Night_Riding.wav'
 		self.love_music = 'sounds/love.wav'
 
+		# Select sound
+		self.select = arcade.load_sound("sounds/select.wav")
+
 		# Represents whichever song is currently playing; default is introductory fairy-fountain music
 		self.current_music = mixer.music.load(self.intro_music)
 
@@ -118,6 +133,9 @@ class MyGame(arcade.Window):
 		# Holds a sprite that carries the "Jake Botello presents" at the intro
 		self.jake = None
 
+		# A list to hold the jakesprite
+		self.intro_list = None
+
 		# Holds AN enemy sprite that can be used for debugging
 		self.enemy = None
 
@@ -125,7 +143,7 @@ class MyGame(arcade.Window):
 		self.darwin_sprite = None
 
 		# Sets the current state of the game; defaults to "PREOPENING", which walks through Jake presents, Warlak production, etc
-		self.current_state = "PREOPENING"
+		self.current_state = 0
 
 		# Offers up the images to be used for the starter pokemon based on the user's choice
 		self.starter_organism_dict = {
@@ -144,6 +162,9 @@ class MyGame(arcade.Window):
 
 		# Attributes used to keep track of which organism is being followed on the screen
 		self.focal_organism = ""
+
+		# Keeps track of the column you selected from to choose your starting focus
+		self.column_choice = 0
 
 		# A list that keeps track of all pokemon available to become focal organisms
 		self.focal_organism_list = []
@@ -199,7 +220,7 @@ class MyGame(arcade.Window):
 		self.view_left = 0
 
 		 # Sets the background color--there are lots of options available through the arcade site
-		arcade.set_background_color((230, 143, 255))
+		arcade.set_background_color((0, 0, 0))
 
 ############################# INIT METHOD HAS BEEN CLEANED #############################
 
@@ -225,12 +246,24 @@ class MyGame(arcade.Window):
 
 		# Note: SpriteList class instances have properties different from normal lists, e.g. no indexes
 
+		# Create a master list to hold all sprite lists
+		self.master_sprite_list = []
+
 		# Create the Sprite lists
 		self.player_list = arcade.SpriteList()
 		self.wall_list = arcade.SpriteList()
 		self.enemy_wall_list = arcade.SpriteList()
 		self.enemy_list = arcade.SpriteList()
 		self.darwin_list = arcade.SpriteList()
+
+		# Append small lists to master sprite list
+		self.master_sprite_list.append(self.player_list)
+		self.master_sprite_list.append(self.wall_list)
+		self.master_sprite_list.append(self.enemy_wall_list)
+		self.master_sprite_list.append(self.enemy_list)
+		self.master_sprite_list.append(self.darwin_list)
+
+		self.played = False
 
 		# A standard list to hold all potential organisms in focus
 		self.focal_organism_list = []
@@ -346,8 +379,17 @@ class MyGame(arcade.Window):
 
 		######### RELATED TO INTRODUCTORY PHASES ###########
 
+		# Holds the jake sprite
+		self.intro_list = arcade.SpriteList()
+
+		# Append jakelist to master sprite list
+		self.master_sprite_list.append(self.intro_list)
+
 		# Holds 'Jake Presents' message
 		self.jake = arcade.Sprite("images/jakepresents.png", scale=0.5)
+
+		# Append to Jakelist
+		self.intro_list.append(self.jake)
 
 		# Stays on while Jake has not fully faded-in
 		self.jake.fading_in = True
@@ -369,8 +411,11 @@ class MyGame(arcade.Window):
 		# The "Quantitative Genetics of Pokemon" Banner-Sprite
 		self.qg_pokemon = arcade.Sprite("images/qg_pokemon.png", scale = 0.5)
 
+		# Append to introductory list
+		self.intro_list.append(self.qg_pokemon)
+
 		# Switch for drawing opening screen
-		self.pre_2_ready = False
+		self.jake_intro = False
 
 		# Switch for beginning game
 		self.start_game = False
@@ -412,6 +457,9 @@ class MyGame(arcade.Window):
 		# A switch to determine whether or not this sound has been played so it doesn't play infinitely
 		self.darwin_sound_1_played = False
 
+		# A switch to determine whether or not Darwin has been displaced
+		self.darwin_sprite.displaced = False
+
 
 
 
@@ -441,9 +489,17 @@ class MyGame(arcade.Window):
 		# Appends Darwin to a list with himself in it (useful for checking collisions)
 		self.darwin_list.append(self.darwin_sprite)
 
+		# Creates a list to hold oak characters
+		self.oak_sprite_list = arcade.SpriteList()
 
 		# Loads the image of Professor Oak
 		self.prof_oak = arcade.Sprite("images/prof_oak.png", 1)
+
+		# Appends professor oak to his list
+		self.oak_sprite_list.append(self.prof_oak)
+
+		# Adds OakList to the master list
+		self.master_sprite_list.append(self.oak_sprite_list)
 
 		# A switch that says Professor Oak is speaking #### MAY BE DEPRECATED #####
 		self.prof_oak_dialogue = False
@@ -548,8 +604,26 @@ class MyGame(arcade.Window):
 
 		###### FOURTH OAK AND DARWIN DIALOGUE EVENT ########
 
+		self.oak4_m1a_of_3 = arcade.Sprite("images/oak4/oak4-1a.png")
+		self.oak4_m1b_of_3 = arcade.Sprite("images/oak4/oak4-1b.png")
+		self.oak4_m1c_of_3 = arcade.Sprite("images/oak4/oak4-1c.png")
+		self.oak4_m1d_of_3 = arcade.Sprite("images/oak4/oak4-1d.png")
+		self.oak4_m1e_of_3 = arcade.Sprite("images/oak4/oak4-1e.png")
+		self.oak4_m1f_of_3 = arcade.Sprite("images/oak4/oak4-1f.png")
+		self.oak4_m2_of_3 = arcade.Sprite("images/oak4/oak4-2.png")
+		self.oak4_m3_of_3 = arcade.Sprite("images/oak4/oak4-3.png")
+
 		# Creates a list to hold the fourth dialogue event's images
 		self.oak4_list = []
+
+		self.oak4_list.append(self.oak4_m1a_of_3)
+		self.oak4_list.append(self.oak4_m1b_of_3)
+		self.oak4_list.append(self.oak4_m1c_of_3)
+		self.oak4_list.append(self.oak4_m1d_of_3)
+		self.oak4_list.append(self.oak4_m1e_of_3)
+		self.oak4_list.append(self.oak4_m1f_of_3)
+		self.oak4_list.append(self.oak4_m2_of_3)
+		self.oak4_list.append(self.oak4_m3_of_3)
 
 
 
@@ -604,6 +678,9 @@ class MyGame(arcade.Window):
 		# Creates a list to hold the hearts that'll go floating everywhere during random mating
 		self.heart_list = arcade.SpriteList()
 
+		# Add the heart list to the master sprite list
+		self.master_sprite_list.append(self.heart_list)
+
 		# A switch--tells us whether or not we're reading for the "fly-away" event/random mating
 		self.honeymoon_ready = False
 
@@ -646,8 +723,12 @@ class MyGame(arcade.Window):
 		# Define an 'experimental' list (#### CHANGE NAME ####)
 		self.experimental_list = arcade.SpriteList()
 
-		# Defines all sprites #### (PROBABLY SOULD REMOVE) ####
-		self.define_all_ten_sprites_images()
+		# Define a list to hold only the histogram-drawn characters
+		self.histogram_list = arcade.SpriteList()
+
+		# Add the experimental list to the master sprite list
+		self.master_sprite_list.append(self.experimental_list)
+
 
 
 		########## RELATED TO ENEMY CONSTRUCTION ##############
@@ -676,13 +757,7 @@ class MyGame(arcade.Window):
 		# Creates a physics engine list to hold all player engines
 		self.player_physics_engines_list = []
 
-		# Create a physics engine for each sprite in the player_list
-		for i in self.experimental_list:
-
-			# Creates the physics engine
-			i.physics_engine = arcade.PhysicsEnginePlatformer(i, self.wall_list ,GRAVITY)
-			# Adds to the list
-			self.player_physics_engines_list.append(i.physics_engine)
+		# Note: Player physics engines will be created in the "define all sprites" area
 
 		# Creates a physics engine for a single enemy (if there's just one)
 		self.physics_engine_enemy = arcade.PhysicsEnginePlatformer(self.enemy, self.enemy_wall_list, GRAVITY)
@@ -693,7 +768,23 @@ class MyGame(arcade.Window):
 		# Gives Darwin a physics engine so that he can serve as the end of the level
 		self.physics_engine_darwin = arcade.PhysicsEnginePlatformer(self.darwin_sprite, self.wall_list, GRAVITY)
 
+		# Make a master physics engine list to hold all physics engines for easy updating
+		self.master_physics_engine_list = []
 
+		# Append darwin engine to list
+		self.master_physics_engine_list.append(self.physics_engine_darwin)
+
+		# Extend entire enemy/player physics engine list to master list
+		self.master_physics_engine_list.extend(self.enemy_physics_engine_list)
+		self.master_physics_engine_list.extend(self.player_physics_engines_list)
+
+
+		# A final loop to apply effects to EVERY sprite at once during set-up:
+		for sprite_list in self.master_sprite_list:
+			for sprite in sprite_list:
+				# Give every sprite the ability to fade in (default) and out
+				sprite.fading_in = True
+				sprite.fading_out = False
 
 
 		############################# SETUP METHOD HAS BEEN CLEANED #############################
@@ -701,92 +792,180 @@ class MyGame(arcade.Window):
 
 	def define_all_ten_sprites_images(self):
 
+		# Sets player_list equal to experimetal_list so that all changes to the latter affect the former
+		self.player_list = self.experimental_list
 
-			### Generates a sprite for each level of variation in the population ###
+		### Generates a sprite for each level of variation in the population ###
+		### NOTE ABOUT DUMMY SPRITES ###
+		# They're used only for the histogram--they stack atop the usable organism in
+		# the experimental list
 
-			# Will lose 2 std_dev from mean
-	        self.organism_var1_sprite = arcade.Sprite(self.starter_organism)
+		# Will lose 2 std_dev from mean
+		self.organism_var1_sprite = arcade.Sprite(self.starter_organism)
 
-	        # Will lose 1.5 std_dev from mean
-	        self.organism_var2_sprite = arcade.Sprite(self.starter_organism)
+		# Will lose 1.5 std_dev from mean
+		self.organism_var2_sprite = arcade.Sprite(self.starter_organism)
+		self.organism_var2_dummy1 = arcade.Sprite(self.starter_organism)
 
-	        # Will lose 1 std_dev from mean
-	        self.organism_var3_sprite = arcade.Sprite(self.starter_organism)
+		# Will lose 1 std_dev from mean
+		self.organism_var3_sprite = arcade.Sprite(self.starter_organism)
+		self.organism_var3_dummy1 = arcade.Sprite(self.starter_organism)
+		self.organism_var3_dummy2 = arcade.Sprite(self.starter_organism)
 
-	        # Will lose 0.5 std_dev from mean
-	        self.organism_var4_sprite = arcade.Sprite(self.starter_organism)
+		# Will lose 0.5 std_dev from mean
+		self.organism_var4_sprite = arcade.Sprite(self.starter_organism)
+		self.organism_var4_dummy1 = arcade.Sprite(self.starter_organism)
+		self.organism_var4_dummy2 = arcade.Sprite(self.starter_organism)
+		self.organism_var4_dummy3 = arcade.Sprite(self.starter_organism)
 
-	        # Will lose 0.25 std_dev from mean
-	        self.organism_var5_sprite = arcade.Sprite(self.starter_organism)
+		# Will lose 0.25 std_dev from mean
+		self.organism_var5_sprite = arcade.Sprite(self.starter_organism)
+		self.organism_var5_dummy1 = arcade.Sprite(self.starter_organism)
+		self.organism_var5_dummy2 = arcade.Sprite(self.starter_organism)
+		self.organism_var5_dummy3 = arcade.Sprite(self.starter_organism)
+		self.organism_var5_dummy4 = arcade.Sprite(self.starter_organism)
 
-	        # Will gain 0.25 std_dev from mean
-	        self.organism_var6_sprite = arcade.Sprite(self.starter_organism)
+		# Will gain 0.25 std_dev from mean
+		self.organism_var6_sprite = arcade.Sprite(self.starter_organism)
+		self.organism_var6_dummy1 = arcade.Sprite(self.starter_organism)
+		self.organism_var6_dummy2 = arcade.Sprite(self.starter_organism)
+		self.organism_var6_dummy3 = arcade.Sprite(self.starter_organism)
+		self.organism_var6_dummy4 = arcade.Sprite(self.starter_organism)
 
-	        # Will gain 0.5 std_dev from mean
-	        self.organism_var7_sprite = arcade.Sprite(self.starter_organism)
 
-	        # Will gain 1 std_dev from mean
-	        self.organism_var8_sprite = arcade.Sprite(self.starter_organism)
+		# Will gain 0.5 std_dev from mean
+		self.organism_var7_sprite = arcade.Sprite(self.starter_organism)
+		self.organism_var7_dummy1 = arcade.Sprite(self.starter_organism)
+		self.organism_var7_dummy2 = arcade.Sprite(self.starter_organism)
+		self.organism_var7_dummy3 = arcade.Sprite(self.starter_organism)
 
-	        # Will gain 1.5 std_dev from mean
-	        self.organism_var9_sprite = arcade.Sprite(self.starter_organism)
+		# Will gain 1 std_dev from mean
+		self.organism_var8_sprite = arcade.Sprite(self.starter_organism)
+		self.organism_var8_dummy1 = arcade.Sprite(self.starter_organism)
+		self.organism_var8_dummy2 = arcade.Sprite(self.starter_organism)
+		self.organism_var8_dummy3 = arcade.Sprite(self.starter_organism)
 
-	        # Will gain 2 std_dev from mean
-	        self.organism_var10_sprite = arcade.Sprite(self.starter_organism)
+		# Will gain 1.5 std_dev from mean
+		self.organism_var9_sprite = arcade.Sprite(self.starter_organism)
+		self.organism_var9_dummy1 = arcade.Sprite(self.starter_organism)
 
-	        # Append all to experimental list
-	        self.experimental_list.append(self.organism_var1_sprite)
-	        self.experimental_list.append(self.organism_var2_sprite)
-	        self.experimental_list.append(self.organism_var3_sprite)
-	        self.experimental_list.append(self.organism_var4_sprite)
-	        self.experimental_list.append(self.organism_var5_sprite)
-	        self.experimental_list.append(self.organism_var6_sprite)
-	        self.experimental_list.append(self.organism_var7_sprite)
-	        self.experimental_list.append(self.organism_var8_sprite)
-	        self.experimental_list.append(self.organism_var9_sprite)
-	        self.experimental_list.append(self.organism_var10_sprite)
 
-	        # Check to see which starter was chosen and change textures
-	        for i in self.experimental_list:
+		# Will gain 2 std_dev from mean
+		self.organism_var10_sprite = arcade.Sprite(self.starter_organism)
 
-	            # If starter is bulbasaur, give bulbasaur textures
-	            if self.starter_string == "bulbasaur":
-	            	# Append left image
-	                texture = arcade.load_texture("images/bulbasaur_left.png")
-	                i.textures.append(texture)
+		# Append all to experimental list
+		self.experimental_list.append(self.organism_var1_sprite)
+		self.experimental_list.append(self.organism_var2_sprite)
+		self.experimental_list.append(self.organism_var3_sprite)
+		self.experimental_list.append(self.organism_var4_sprite)
+		self.experimental_list.append(self.organism_var5_sprite)
+		self.experimental_list.append(self.organism_var6_sprite)
+		self.experimental_list.append(self.organism_var7_sprite)
+		self.experimental_list.append(self.organism_var8_sprite)
+		self.experimental_list.append(self.organism_var9_sprite)
+		self.experimental_list.append(self.organism_var10_sprite)
 
-	                # Append right image
-	                texture = arcade.load_texture("images/bulbasaur_right.png")
-	                i.textures.append(texture)
-	                print("We're bulbasaurs with our textures appended!")
 
-	            # If starter is charmander, give charmander textures
-	            elif self.starter_string == "charmander":
-	            	# Append left image
-	                texture = arcade.load_texture("images/charmander_left.png")
-	                i.textures.append(texture)
+		# Make a histogram list that contains all the same sprites but can have others (dummies) added
+		self.histogram_list.append(self.organism_var1_sprite)
+		self.histogram_list.append(self.organism_var2_sprite)
+		self.histogram_list.append(self.organism_var3_sprite)
+		self.histogram_list.append(self.organism_var4_sprite)
+		self.histogram_list.append(self.organism_var5_sprite)
+		self.histogram_list.append(self.organism_var6_sprite)
+		self.histogram_list.append(self.organism_var7_sprite)
+		self.histogram_list.append(self.organism_var8_sprite)
+		self.histogram_list.append(self.organism_var9_sprite)
+		self.histogram_list.append(self.organism_var10_sprite)
 
-	                # Append right image
-	                texture = arcade.load_texture("images/charmander_right.png")
-	                i.textures.append(texture)
-	                print("We're charmanders with our textures appended!")
-	            
-	            # If starter is squirtle, give squirtle textures
-	            elif self.starter_string == "squirtle":
-	            	# Append left image
-	                texture = arcade.load_texture("images/squirtle_left.png")
-	                i.textures.append(texture)
+		# Append all dummies to the histogram list (which already has the regular sprites in it)
+		
+		# Var 2 Organism Dummies
+		self.histogram_list.append(self.organism_var2_dummy1)
 
-	                # Append right image
-	                texture = arcade.load_texture("images/squirtle_right.png")
-	                i.textures.append(texture)
-	                print("We're squirtles with our textures appended!")
+		# Var 3 Organism Dummies
+		self.histogram_list.append(self.organism_var3_dummy1)
+		self.histogram_list.append(self.organism_var3_dummy2)
 
-	            
-	           
-	            # Establishes that the organism, by default, isn't dead
-	            i.dead = False
+		# Var 4 Organism Dummies
+		self.histogram_list.append(self.organism_var4_dummy1)
+		self.histogram_list.append(self.organism_var4_dummy2)
 
+		# Var 5 Organism Dummies
+		self.histogram_list.append(self.organism_var5_dummy1)
+		self.histogram_list.append(self.organism_var5_dummy2)
+		self.histogram_list.append(self.organism_var5_dummy3)
+
+		# Var 6 Organism Dummies
+		self.histogram_list.append(self.organism_var6_dummy1)
+		self.histogram_list.append(self.organism_var6_dummy2)
+		self.histogram_list.append(self.organism_var6_dummy3)
+
+		# Var 7 Organism Dummies
+		self.histogram_list.append(self.organism_var7_dummy1)
+		self.histogram_list.append(self.organism_var7_dummy2)
+
+		# Var 8 Organism Dummies
+		self.histogram_list.append(self.organism_var8_dummy1)
+		self.histogram_list.append(self.organism_var8_dummy2)
+
+		# Var 8 Organism Dummies
+		self.histogram_list.append(self.organism_var9_dummy1)
+
+
+		for i in self.experimental_list:
+			i.physics_engine = arcade.PhysicsEnginePlatformer(i, self.wall_list, GRAVITY)
+			self.player_physics_engines_list.append(i.physics_engine)
+
+
+        # Check to see which starter was chosen and change textures
+		for i in self.histogram_list:
+
+			# Gives the histogram column in which this organism resides; defaults to zero
+			i.column = 0
+            # If starter is bulbasaur, give bulbasaur textures
+			if self.starter_string == "bulbasaur":
+            	# Append left image
+				texture = arcade.load_texture("images/bulbasaur_left.png")
+				i.textures.append(texture)
+
+				# Append right image
+				texture = arcade.load_texture("images/bulbasaur_right.png")
+				i.textures.append(texture)
+				print("We're bulbasaurs with our textures appended!")
+
+			# If starter is charmander, give charmander textures
+			elif self.starter_string == "charmander":
+				# Append left image
+				texture = arcade.load_texture("images/charmander_left.png")
+				i.textures.append(texture)
+
+				# Append right image
+				texture = arcade.load_texture("images/charmander_right.png")
+				i.textures.append(texture)
+				print("We're charmanders with our textures appended!")
+
+            # If starter is squirtle, give squirtle textures
+			elif self.starter_string == "squirtle":
+				# Append left image
+				texture = arcade.load_texture("images/squirtle_left.png")
+				i.textures.append(texture)
+
+				# Append right image
+				texture = arcade.load_texture("images/squirtle_right.png")
+				i.textures.append(texture)
+				print("We're squirtles with our textures appended!")
+
+
+
+
+			# Establishes that the organism, by default, isn't dead
+			i.dead = False
+
+
+	def position_player_sprites_in_game(self):
+		for i in self.player_list:
+			i.center_x = 0
 
 ############## DEFINE_ALL_TEN_SPRITES METHOD HAS BEEN CLEANED #############
 
@@ -801,7 +980,7 @@ class MyGame(arcade.Window):
 			appropriate_mean_scale = scale_dict[self.starter_string]
 
 			# Set character scaling equal to the mean times the scalar constant
-			self.CHARACTER_SCALING = appropriate_scale * starting_mean
+			self.CHARACTER_SCALING = appropriate_mean_scale * starting_mean
 
 			# Prevents the variance from making characters overtake the screen
 			self.var = self.var * var_scalar
@@ -810,15 +989,47 @@ class MyGame(arcade.Window):
 			self.std_dev = numpy.sqrt(self.var)
 
 			# Give each character its appropriate amount of deviation from the mean
+
+			# Var 1 Org
 			self.organism_var1_sprite.scale = self.CHARACTER_SCALING - (self.std_dev*2)
+
+			# Var 2 org and dummy
 			self.organism_var2_sprite.scale = self.CHARACTER_SCALING - (self.std_dev*1.5)
+			self.organism_var2_dummy1.scale = self.organism_var2_sprite.scale
+
+			# Var 3 org and dummies
 			self.organism_var3_sprite.scale = self.CHARACTER_SCALING - (self.std_dev)
+			self.organism_var3_dummy1.scale = self.organism_var3_sprite.scale
+			self.organism_var3_dummy2.scale = self.organism_var3_sprite.scale
+
+			# Var 4 org and dummies
 			self.organism_var4_sprite.scale = self.CHARACTER_SCALING - (self.std_dev*0.5)
+			self.organism_var4_dummy1.scale = self.organism_var4_sprite.scale
+			self.organism_var4_dummy2.scale = self.organism_var4_sprite.scale
+
+
 			self.organism_var5_sprite.scale = self.CHARACTER_SCALING - (self.std_dev*0.25)
+			self.organism_var5_dummy1.scale = self.organism_var5_sprite.scale
+			self.organism_var5_dummy2.scale = self.organism_var5_sprite.scale
+			self.organism_var5_dummy3.scale = self.organism_var5_sprite.scale
+
+
 			self.organism_var6_sprite.scale = self.CHARACTER_SCALING + (self.std_dev*0.25)
+			self.organism_var6_dummy1.scale = self.organism_var6_sprite.scale
+			self.organism_var6_dummy2.scale = self.organism_var6_sprite.scale
+			self.organism_var6_dummy3.scale = self.organism_var6_sprite.scale
+
 			self.organism_var7_sprite.scale = self.CHARACTER_SCALING + (self.std_dev*0.5)
+			self.organism_var7_dummy1.scale = self.organism_var7_sprite.scale
+			self.organism_var7_dummy2.scale = self.organism_var7_sprite.scale
+
 			self.organism_var8_sprite.scale = self.CHARACTER_SCALING + (self.std_dev*1)
+			self.organism_var8_dummy1.scale = self.organism_var8_sprite.scale
+			self.organism_var8_dummy2.scale = self.organism_var8_sprite.scale
+
 			self.organism_var9_sprite.scale = self.CHARACTER_SCALING + (self.std_dev*1.5)
+			self.organism_var9_dummy1.scale = self.organism_var9_sprite.scale
+
 			self.organism_var10_sprite.scale = self.CHARACTER_SCALING + (self.std_dev*2)
 
 	        # Sets all textures in each organism equal to the scale of the organism
@@ -836,6 +1047,41 @@ class MyGame(arcade.Window):
     
 ########################### METHODS RELATED TO FADING IN AND OUT ##################################
 
+	def fade_in(self, target, rate=1):
+		# If the target isn't fading in and is already at 255, don't do anything
+		if not ((target.fading_in == False) and (target.alpha == 255)):
+			# If the target isn't fading in and its alpha is near opaque, keep it there
+			if (target.fading_in == False) and (target.alpha >= 245):
+				target.alpha = 255
+
+			# If the target is fading in and its alpha is at max, make it zero (start process)
+			if (target.fading_in == True) and (target.alpha == 255):
+				target.alpha = 0
+
+			# If the targets alpha is greater than 246 (close to max), stop fading in
+			if target.alpha >= 246:
+				target.fading_in = False
+
+			# If the target's alpha is greater than zero and it's fading in, increase alpha
+			if (target.alpha >= 0) and (target.fading_in == True):
+				target.alpha += rate
+
+			# If the target's alpha is greater than zero, draw it
+		if (target.alpha > 0):
+			target.draw()
+
+	def fade_out(self, target, rate=1):
+		# If the target is above zero, fade it out
+		if target.alpha > 0:
+			target.alpha -= 1
+
+		# Only draw the target if it's above zero
+		if target.alpha > 0:
+			target.draw()
+
+################## BOTH FADE-IN AND FADE-OUT ARE WORKING AS INTENDED ####################
+
+
 
 	# A "fade-in-and-out" method; ### CHANGE NAME ONCE EVERYTHING'S WORKING ###
 	def fade_in_and_out_better(self, target, rate_in=1, rate_out=1):
@@ -843,22 +1089,23 @@ class MyGame(arcade.Window):
 		if not ((target.fading_out == True) and (target.alpha == 0)):
 			# If the target IS still fading in but is completely opaque
 			# (i.e. the target hasn't begun yet):
+
 			if (target.fading_in == True) and (target.alpha == 255):
 				# Change its opacity to zero so that it can begin the process
 			    target.alpha = 0
 
 			# If the target's opacity is zero and it's fading in, starting increasing opacity
 			if target.fading_in == True:
-			    target.alpha += rate_in
+				target.alpha += rate_in
 
 			# If the target is still fading in and the opacity is over 240, start fading out
 			if (target.fading_in == True) and target.alpha > 240:
-			    target.fading_in = False
-			    target.fading_out = True
-
+				target.fading_in = False
+				target.fading_out = True
+			
 			# If the target is fading out but still has some opacity (>0), reduce opacity
 			if (target.fading_out == True) and (target.alpha > 0):
-			    target.alpha -= rate_out
+				target.alpha -= rate_out
 
 			# If the target is fading out and its opacity has fallen to or below zero, keep it at zero
 			elif (target.fading_out == True) and (target.alpha <= 0):
@@ -866,7 +1113,8 @@ class MyGame(arcade.Window):
 
 			# Only draw the target when its opacity is greater than zero (to save on memory) 
 			if target.alpha > 0:
-			    target.draw()
+				target.draw()
+		
 
 
 
@@ -876,7 +1124,7 @@ class MyGame(arcade.Window):
 
 
 
-	def fade_in_sequence(self, target_list, start_range, end_range, rate_in=1, rate_out=1, lower_threshold=100, upper_threshold=255):
+	def fade_in_sequence(self, target_list, start_range, end_range, rate_in=1, rate_out=5, lower_threshold=100, upper_threshold=255):
 		# Start by fading in-and-out the first thing in the list
 		# If the start range is zero, just begin with zero
 		if start_range == 0:
@@ -909,21 +1157,1016 @@ class MyGame(arcade.Window):
 		# Get the current viewport
 		starting_viewport = arcade.get_viewport()
 
-		# Set darwin equal to his standard (default) texture (which is to the left)
+		# Set darwin equal to his right-facing texture
 		self.darwin_sprite.set_texture(0)
 
-		# Set Darwin's coordinates on the screen (top left corner of the viewport)
-		self.darwin_sprite.center_x = starting_viewport[0] + 100
-		self.darwin_sprite.center_y = starting_viewport[2] + 500
+		if self.current_state < 7:
+			# Set Darwin's coordinates on the screen (top left corner of the viewport)
+			self.darwin_sprite.center_x = starting_viewport[0] + 100
+			self.darwin_sprite.center_y = starting_viewport[2] + 500
 
-		# Draw Darwin
+		elif self.current_state >= 7:
+			self.darwin_sprite.center_x = self.end_of_level
+			self.darwin_sprite.center_y = self.hist_floor
+			print("we made it here")
+
+		# Draws Darwin
+		# Note:  This will conflict with any fade-in/fade-out effects
+		#self.darwin_sprite.draw()
+
+		
+#################### DRAW SCENES ########################
+
+### NOTE: Each scene needs to increment to the next scene using the following (increment scene) method:
+
+	def increment_scene(self):
+		# Simply adds "1" to the current state to move us forward
+		self.current_state += 1
+
+
+	def draw_opening_screen(self):
+		# Get the latest viewport
+		viewport = arcade.get_viewport()
+
+		# Get the new dimensions for the logo only if the second phase hasn't started
+		if (self.jake_intro == False):
+			self.jake.center_x = viewport[0] + 400
+			self.jake.center_y = viewport[2] + 300
+			# Fade-in-and-out logo
+			self.fade_in_and_out_better(self.jake, 15, 15)
+
+
+		# Once the first logo has faded out, change the image to the warlak and advance
+		# Note: the "jake_intro" check ensures that this is only done once
+		if (self.jake.alpha == 0) and (self.jake_intro == False):
+		    self.jake.set_texture(0)
+		    self.jake_intro = True
+		    
+		    # Be sure to reset Jake's fading status so he can go again, now a warlak
+		    self.jake.fading_in = True
+		    self.jake.fading_out = False
+
+
+		    
+
+		# If the intro is complete, move on to the next phase
+		elif (self.jake_intro == True) and (self.current_state != 1):  
+			
+			# Reorient the image slightly for the warlak
+			self.jake.center_x = viewport[0] + 400
+			self.jake.center_y = viewport[2] + 360
+			self.fade_in_and_out_better(self.jake, 15, 15)
+
+			# Don't advance the scene until warlak is invisible
+			if self.jake.alpha == 0:
+				#self.increment_scene()
+
+				# Plays the pre-loaded intro music (fairy fountain)
+				### NOTE:  Hitting "play" repeatedly will cause you grief, so be sure to 
+				# Keep this "play()" button where it is (wedged between two scenes)"	
+		####################### TURN MUSIC BACK ON WHEN DEBUGGING IS DONE ####################
+				#mixer.music.play(-1)
+
+				# Advance to the next scene
+				self.increment_scene()
+					
+		# Don't advance until the scene has incremented forward
+		if self.current_state == 1:
+
+			# Draw the banner
+			self.draw_opening_banner(viewport)
+
+			# Start the intro pokemon loop
+			# NOTE: This is only looping TWO pokemon right now!
+			# You can cheat, if you must, by adding another Gyarados as a fourth option and incrementing
+			# up one.
+			self.draw_intro_pokemon_loop(viewport)
+			
+
+		
+
+
+	def draw_opening_banner(self, starting_viewport):
+		# Position the banner in the lower-center of the screen
+		self.qg_pokemon.center_x = starting_viewport[0] + 370
+		self.qg_pokemon.center_y = starting_viewport[2] + 160
+
+		# Fade in the banner
+		self.fade_in(self.qg_pokemon)
+
+		
+	def draw_intro_pokemon_loop(self, starting_viewport):
+		# Position the pokemon
+		for i in self.intro_pokemon:
+			i.center_x = starting_viewport[0] + 370
+			i.center_y = starting_viewport[2] + 400
+
+		# Fade the pokemon in
+		self.fade_in_sequence(self.intro_pokemon, 0, 4, lower_threshold = 5, upper_threshold = 10)
+
+		# Run a loop that restarts once the last pokemon has been reached
+		for i in range(1):
+			# Set the counter at zero
+			counter = 0
+			for i in self.intro_pokemon:
+				# If the pokemon is at lower than 5 opacity, increment
+				if i.alpha < 5:
+					counter += 1
+
+			# Once you've reached the end of the list of pokemon, restart the fade_in_sequence
+			# By resetting the parameters
+			if counter >= 3:
+				for i in self.intro_pokemon:
+					# Reset parameters
+					i.fading_in = True
+					i.fading_out = False
+					i.alpha = 255
+
+
+	def position_oak_text(self, message):
+		# Set the current/newest viewport
+		new_viewport = arcade.get_viewport()
+
+		# Give the basic orientatoin for oak text
+		message.center_x = new_viewport[0] + 150
+		message.center_y = new_viewport[2] + 200
+
+
+	def draw_prof_oak(self):
+		# Get the newest viewport
+		starting_viewport = arcade.get_viewport()
+
+		# Orient Professor Oak (Basic/Standard coordinates)
+		self.prof_oak.center_x = starting_viewport[0] + 620
+		self.prof_oak.center_y = starting_viewport[2] + 100
+		    
+		# Fade Professor Oak in
+		self.fade_in(self.prof_oak)
+
+
+	def draw_darwin_text(self, message):
+		# Gets the current viewport
+		new_viewport = arcade.get_viewport()
+
+		# Basic positioning for Darwin text
+		message.center_x = new_viewport[0] + 300
+		message.center_y = new_viewport[2] + 400
+
+		
+	def draw_oak_dialogue_1(self):
+		if self.current_state == 3:
+			self.draw_prof_oak()
+			for message in self.oak1_list:
+				self.position_oak_text(message)
+
+	        # Set the coordinates of oak's messages
+			self.oak1_list[1].center_y = self.oak1_list[0].center_y - 30
+			self.oak1_list[1].center_x = self.oak1_list[0].center_x + 107
+			self.oak1_list[2].center_y = self.oak1_list[1].center_y - 35
+			self.oak1_list[2].center_x = self.oak1_list[1].center_x + 22
+
+			# Draw/Fade-in the dialogue
+			self.fade_in_sequence(self.oak1_list, 1, 4, rate_out=2)
+			
+			# Begin Darwin's introduction            
+			if (self.oak1_list[2].alpha >= 230) and (self.oak1_list[2].alpha < 255):
+				self.darwin_dialogue = True
+
+			# Draw Darwin if it's his turn to talk
+			if self.darwin_dialogue == True:
+                #self.prof_oak_dialogue = False
+				self.draw_charles_darwin()
+				# In this case, draw Darwin separately because he isn't fading in
+				self.darwin_sprite.draw()
+
+				# Check to see if Darwin's played his sound so that it doesn't repeat over and over
+				if self.darwin_sound_1_played == False:
+					# Load and play Darwin's sound and identify it as played
+					annoyed = arcade.load_sound("sounds/darwin_annoyed.wav")
+					annoyed.play()
+					self.darwin_sound_1_played = True
+
+
+				# Position Darwin's text more specifically
+				self.draw_darwin_text(self.oak1_list[3])
+				self.draw_darwin_text(self.oak1_list[4])
+
+				# Position Oak's responses
+				self.oak1_list[4].center_y -= 40
+				self.oak1_list[4].center_x += 50
+
+				# Fade in-and-out Darwin's text
+				self.fade_in_and_out_better(self.oak1_list[3], rate_in=6, rate_out=1)
+				self.fade_in_and_out_better(self.oak1_list[4], rate_in=3, rate_out=1)
+
+			# Check to see if Darwin's messages are all the way faded in
+			if self.oak1_list[4].alpha < 250:
+
+				# Position the rest of Oak's messages with respect to one-another
+				self.oak1_list[5].center_x = self.oak1_list[0].center_x + 100
+				self.oak1_list[5].center_y = self.oak1_list[0].center_y
+
+				self.oak1_list[6].center_x = self.oak1_list[3].center_x
+				self.oak1_list[6].center_y = self.oak1_list[3].center_y
+
+				self.oak1_list[7].center_x = self.oak1_list[3].center_x - 40
+				self.oak1_list[7].center_y = self.oak1_list[3].center_y - 40
+
+				self.oak1_list[8].center_x = self.oak1_list[0].center_x + 100
+				self.oak1_list[8].center_y = self.oak1_list[0].center_y
+                
+                
+				# Fade in-and-out the last of Oak's thoughts
+				self.fade_in_sequence(self.oak1_list, 0, 9, rate_out=4)
+
+				# If the scene hasn't already been advanced, advance it when the messages are done
+				if self.oak1_list[8].alpha == 0 and (self.current_state <= 4):
+					self.increment_scene()
+
+
+	def draw_species_selection_text(self):
+		# Get the current viewport
+		new_viewport = self.get_viewport()
+
+		# Draw Oak (or keep him drawn--he's already onscreen)
+		self.draw_prof_oak()
+		# Draw Darwin (same)
+		self.draw_charles_darwin()
+
+		# Since Darwin isn't drawn by his method, keep him drawn here
 		self.darwin_sprite.draw()
 
+		# Give the default positions for oak text
+		for message in self.oak2_list:
+			self.position_oak_text(message)
+
+		# Re-position Oak text for species selection
+		self.oak2_list[0].center_x += 100
+
+		self.oak2_list[1].center_y += 300
+		self.oak2_list[1].center_x += 150
+
+		self.oak2_list[2].center_y -= 50
+		self.oak2_list[2].center_x += 90
+
+		self.oak2_list[3].center_y -= 100
+		self.oak2_list[3].center_x += 80
+
+		# Fade oak text in
+		self.fade_in_sequence(self.oak2_list, 0, 4)
+
+		self.prof_oak_dialogue = True
+
+		# Reposition oak text further
+		for i in self.oak2_list[3:]:
+			i.center_x += 100
+			i.center_y += 50
+
+		# Before there's a starter chosen, draw the different pokemon to be selected from 
+		self.draw_characters()
+
+		# If a starter has been chosen, give Oak's response
+		if self.starter_string:
+			for i in self.oak2_list[:4]:
+				i.alpha = 0
+
+		# Charmander response				
+		if self.starter_string == "charmander":
+			self.fade_in_and_out_better(self.oak2_list[4], rate_in=5)
+
+		# Squirtle response
+		elif self.starter_string == "squirtle":
+			self.fade_in_and_out_better(self.oak2_list[5], rate_in=5)
+
+		# Bulbasaur response
+		elif self.starter_string == "bulbasaur":
+			self.fade_in_and_out_better(self.oak2_list[6], rate_in=5)
+        
 
 
 
+		# If there is a starter chosen while in state 4, update scaling with new information
+		if self.starter_string and (self.current_state == 4):
+    		# Only update scaling if it hasn't already been updated
+			if self.scaling_updated == False:
+				
+				
+				# Define all ten histogram sprite images again;
+				# This should incorporate the new image (chosen pokemon)
+				self.define_all_ten_sprites_images()
+
+				# This should successfully update the scaling values
+				self.update_scaling(self.starter_string)
+
+				# This should apply the updated values
+				self.scale_everyone()
+
+				# Prevents the scaling from being updated again
+				self.scaling_updated = True
+
+				
+				
+				
+
+		# Advance to the next stage (choosing a focus) if things have incremented properly
+		if self.current_state == 5:
+
+			# Render Oak's response from the previous stage invisible and stop drawing it
+			for i in self.oak2_list[4:7]:
+				i.alpha = 0
+
+			# Keep Darwin on-screen
+			self.draw_charles_darwin()
+			# Keep Oak on-screen
+			self.draw_prof_oak()
+
+			# Oak asks the player to choose from among the population
+			# Note: This is currently overlapping with his previous text as well as the
+			# leftover charmander/squirtle if chosen (so move them off-screen)
+			self.draw_population_choice_text()
+     
+     		# Give coordinates to the histogram characters
+			self.give_hist_coordinates_new(new_viewport)
+
+			# Draw the histogram characters
+			self.draw_choosable_histogram()
+
+			# Darwin gets annoyed and moves
+			# Check to see if it's already happened
+			if self.darwin_sprite.displaced == False:
+				self.darwin_gets_displaced()
+				# Set the switch to true so it doesn't happen again
+				self.darwin_sprite.displaced = True
+
+			# If you've already chosen a column, stop Oak's text
+			if self.column_choice > 0:
+				for text in self.oak3_list:
+					# Set text opacity to zero
+					text.alpha = 0
+
+				# Select a focal organism
+				self.select_focus_and_advance_to_game()
+
+				# Give Oak's last bit of dialogue
+				self.oak_dialogue_pre_game()
+			
+
+	def darwin_gets_displaced(self):
+		self.darwin_annoyed_sound.play()
+		
+		# Check to see where Darwin is before moving him
+		self.darwin_sprite.change_y = -20
+		self.darwin_sprite.draw()
+
+	def draw_population_choice_text(self):
+		for i in self.oak3_list:
+			self.position_oak_text(i)
+
+			# Note: this has been adjusted to fit the new 10-column histogram
+			i.center_x += 150
+			i.center_y += 5
+
+		# Darwin's text
+		self.oak3_list[4].center_y += 350
+		self.oak3_list[4].center_x -= 5
+
+		self.oak3_list[1].center_y -= 50
+		self.oak3_list[3].center_y -= 50
+
+		self.fade_in_sequence(self.oak3_list, 0, 6)
+
+	# Gives coordinates to all histogram characters
+	def give_hist_coordinates_new(self, current_viewport):
+		# Note: These are based on the viewport initially, but are positioned largely relative to
+		# one another
+		base_x = current_viewport[0] + 370
+		base_y = self.hist_floor + 300
+
+
+		### THE PORTION IN USE BELOW REPRESENTS THE NEW, UPDATED HISTOGRAM WITH TEN COLUMNS 
+		# Assigns a column to each sprite so the user can select a phenotype
+
+
+		# Leftmost organism
+		self.organism_var1_sprite.center_y = base_y - 5
+		self.organism_var1_sprite.center_x = base_x - 170
+		self.organism_var1_sprite.column = 1
+
+		# Second from left
+		self.organism_var2_sprite.center_y = base_y - 5
+		self.organism_var2_sprite.center_x = base_x - 105
+		self.organism_var2_sprite.column = 2
+
+		# Dummy 1
+		self.organism_var2_dummy1.center_y = self.organism_var2_sprite.center_y + 50
+		self.organism_var2_dummy1.center_x = self.organism_var2_sprite.center_x
+		self.organism_var2_dummy1.column = 2
+
+
+
+		# Third from left
+		self.organism_var3_sprite.center_y = base_y
+		self.organism_var3_sprite.center_x = base_x - 40
+		self.organism_var3_sprite.column = 3
+
+		# Dummy 1
+		self.organism_var3_dummy1.center_y = self.organism_var3_sprite.center_y + 50
+		self.organism_var3_dummy1.center_x = self.organism_var3_sprite.center_x
+		self.organism_var3_dummy1.column = 3
+
+		# Dummy 2
+		self.organism_var3_dummy2.center_y = self.organism_var3_sprite.center_y + 100
+		self.organism_var3_dummy2.center_x = self.organism_var3_sprite.center_x
+		self.organism_var3_dummy2.column = 3
+
+
+
+		# Fourth from left
+		self.organism_var4_sprite.center_y = base_y
+		self.organism_var4_sprite.center_x = base_x + 25
+		self.organism_var4_sprite.column = 4
+
+		# Dummy 1
+		self.organism_var4_dummy1.center_y = self.organism_var4_sprite.center_y + 50
+		self.organism_var4_dummy1.center_x = self.organism_var4_sprite.center_x
+		self.organism_var4_dummy1.column = 4
+
+		# Dummy 2
+		self.organism_var4_dummy2.center_y = self.organism_var4_sprite.center_y + 100
+		self.organism_var4_dummy2.center_x = self.organism_var4_sprite.center_x
+		self.organism_var4_dummy2.column = 4
+
+
+
+
+		# Middle left
+		self.organism_var5_sprite.center_y = base_y
+		self.organism_var5_sprite.center_x = base_x + 80
+		self.organism_var5_sprite.column = 5
+
+		# Dummy 1
+		self.organism_var5_dummy1.center_y = self.organism_var5_sprite.center_y + 50
+		self.organism_var5_dummy1.center_x = self.organism_var5_sprite.center_x
+		self.organism_var5_dummy1.column = 5
+
+		# Dummy 2
+		self.organism_var5_dummy2.center_y = self.organism_var5_sprite.center_y + 100
+		self.organism_var5_dummy2.center_x = self.organism_var5_sprite.center_x
+		self.organism_var5_dummy2.column = 5
+
+		# Dummy 3
+		self.organism_var5_dummy3.center_y = self.organism_var5_sprite.center_y + 150
+		self.organism_var5_dummy3.center_x = self.organism_var5_sprite.center_x
+		self.organism_var5_dummy3.column = 5
+
+
+		# Middle right
+		self.organism_var6_sprite.center_y = base_y
+		self.organism_var6_sprite.center_x = base_x + 145
+		self.organism_var6_sprite.column = 6
+
+		# Dummy 1
+		self.organism_var6_dummy1.center_y = self.organism_var6_sprite.center_y + 50
+		self.organism_var6_dummy1.center_x = self.organism_var6_sprite.center_x
+		self.organism_var6_dummy1.column = 6
+
+		# Dummy 2
+		self.organism_var6_dummy2.center_y = self.organism_var6_sprite.center_y + 100
+		self.organism_var6_dummy2.center_x = self.organism_var6_sprite.center_x
+		self.organism_var6_dummy2.column = 6
+
+		# Dummy 3
+		self.organism_var6_dummy3.center_y = self.organism_var6_sprite.center_y + 150
+		self.organism_var6_dummy3.center_x = self.organism_var6_sprite.center_x
+		self.organism_var6_dummy3.column = 6
+
+
+
+		# Fourth from right
+		self.organism_var7_sprite.center_y = base_y
+		self.organism_var7_sprite.center_x = base_x + 210
+		self.organism_var7_sprite.column = 7
+
+		# Dummy 1
+		self.organism_var7_dummy1.center_y = self.organism_var7_sprite.center_y + 50
+		self.organism_var7_dummy1.center_x = self.organism_var7_sprite.center_x
+		self.organism_var7_dummy1.column = 7
+
+		# Dummy 2
+		self.organism_var7_dummy2.center_y = self.organism_var7_sprite.center_y + 100
+		self.organism_var7_dummy2.center_x = self.organism_var7_sprite.center_x
+		self.organism_var7_dummy2.column = 7
+
+
+
+		# Third from right
+		self.organism_var8_sprite.center_y = base_y
+		self.organism_var8_sprite.center_x = base_x + 275
+		self.organism_var8_sprite.column = 8
+
+		# Dummy 1
+		self.organism_var8_dummy1.center_y = self.organism_var8_sprite.center_y + 50
+		self.organism_var8_dummy1.center_x = self.organism_var8_sprite.center_x
+		self.organism_var8_dummy1.column = 8
+
+		# Dummy 2
+		self.organism_var8_dummy2.center_y = self.organism_var8_sprite.center_y + 100
+		self.organism_var8_dummy2.center_x = self.organism_var8_sprite.center_x
+		self.organism_var8_dummy2.column = 8
+
+
+
+		# Second from right
+		self.organism_var9_sprite.center_y = base_y
+		self.organism_var9_sprite.center_x = base_x + 340
+		self.organism_var9_sprite.column = 9
+
+		# Dummy 1
+		self.organism_var9_dummy1.center_y = self.organism_var9_sprite.center_y + 50
+		self.organism_var9_dummy1.center_x = self.organism_var9_sprite.center_x
+		self.organism_var9_dummy1.column = 9
+
+		
+		# Rightmost organism
+		self.organism_var10_sprite.center_y = base_y
+		self.organism_var10_sprite.center_x = base_x + 405
+		self.organism_var10_sprite.column = 10
+
+	def draw_choosable_histogram(self):
+        # Assign positions to (and draws) histogram characters
+		for i in self.histogram_list:
+			i.center_x -= 140
+			i.fading_in = True
+			i.fading_out = False
+			
+			if self.column_choice == 0:
+				i.draw()
+			elif self.column_choice > 0:
+				if i.column == self.column_choice:
+					i.draw()
+
+	# Gives a scaling update based on the pokemon chosen
+	def update_scaling(self, starter_string):
+		# If bulbasaur is chosen, set the variance and standard deviation
+		if "bulbasaur" == starter_string:
+			# If level one, adjust scaling to line up with the starting (ancestral) mean
+			if self.level == 1:
+				self.CHARACTER_SCALING = bulbasaur_scaling * starting_mean
+				self.var = self.var * bulbasaur_scaling * var_scalar
+				self.std_dev = numpy.sqrt(self.var)
+
+			# If this process takes place after the first level, change the scaling appropriately
+			elif self.level > 1:
+				self.CHARACTER_SCALING = bulbasaur_scaling * self.CHARACTER_SCALING
+				self.var = self.var * bulbasaur_scaling * var_scalar
+				self.std_dev = numpy.sqrt(self.var)
+
+		# If charmander is selected, set the variance and standard deviation
+		elif "charmander" == starter_string:
+			# If level one, adjust scaling to line up with the starting (ancestral) mean
+			if self.level == 1:
+				self.CHARACTER_SCALING = charmander_scaling * starting_mean
+				self.var = self.var * charmander_scaling * var_scalar
+				self.std_dev = numpy.sqrt(self.var)
+
+			# If this process takes place after the first level, change the scaling appropriately
+			elif self.level > 1:
+				self.CHARACTER_SCALING = charmander_scaling * self.CHARACTER_SCALING
+				print("charmander updated!")
+				self.var = self.var * charmander_scaling * var_scalar
+				self.std_dev = numpy.sqrt(self.var)
+	
+		# If squirtle is chosen, set the variance and standard deviation
+		elif "squirtle" == starter_string:
+			# If level one, adjust scaling to line up with the starting (ancestral) mean
+			if self.level == 1:
+				self.CHARACTER_SCALING = squirtle_scaling * starting_mean
+				self.var = self.var * squirtle_scaling * var_scalar
+				self.std_dev = numpy.sqrt(self.var)
+
+			# If this process takes place after the first level, change the scaling appropriately
+			elif self.level > 1:
+				self.CHARACTER_SCALING = squirtle_scaling * self.CHARACTER_SCALING
+				self.var = self.var * squirtle_scaling * 0.01
+				self.std_dev = numpy.sqrt(self.var)
+		
+		# In the event that the variance is negative (or zero), set it to a teensy number instead
+		if self.var <= 0:
+			self.var = 0.00000001
+
+		# Same for standard deviation (though this wouldn't happen if variance were already positive)
+		# It's slightly plausible that std_dev would become zero through rounding error, though.
+		if self.std_dev <= 0:
+			self.std_dev = 0.000000001
+
+	# Draw the pokemon species available to choose in Professor Oak's dialogue
+	def draw_characters(self):
+		# Get the current viewport
+		current_viewport = self.get_viewport()
+
+		# Properly scale the bulbasaur example
+		bulbasaur = arcade.Sprite("images/bulbasaur_left.png", bulbasaur_scaling*5)
+
+		# Properly scale the charmander example
+		charmander = arcade.Sprite("images/charmander_left.png", charmander_scaling*5)
+
+		# Properly scale the squirtle example
+		squirtle = arcade.Sprite("images/squirtle_left.png", squirtle_scaling*6)
+
+		# Append all three pokemon to a "starters list" to make them easy to identify
+		self.starters_list = arcade.SpriteList()
+
+		# While no one's been chosen, draw all three
+		if not self.starter_string:
+			self.starters_list.append(bulbasaur)
+			self.starters_list.append(charmander)
+			self.starters_list.append(squirtle)   
+		
+		elif (self.starter_string) and (self.current_state == 4):
+			# Add bulbasaur to the list if it's been chosen (draw it)
+			if self.starter_string == "bulbasaur":
+				self.starters_list.append(bulbasaur)
+
+			# Add charmander to the list if he's been chosen (draw it)
+			elif self.starter_string == "charmander":
+				self.starters_list.append(charmander)
+
+			# Add squirtle to the list if he's been chosen (draw it)
+			elif self.starter_string == "squirtle":
+				self.starters_list.append(squirtle)
+
+		# Set bulbasaur's coordinates on-screen
+		bulbasaur.center_x = int(current_viewport[0] + 120)
+		bulbasaur.center_y = int(current_viewport[2] + 350)
+
+		# Set bulbasaur's coordinates on-screen
+		charmander.center_x = int(current_viewport[0] + 370)
+		charmander.center_y = int(current_viewport[2] + 350)
+
+		# Set bulbasaur's coordinates on-screen
+		squirtle.center_x = int(current_viewport[0] + 620)
+		squirtle.center_y = int(current_viewport[2] + 350)
+
+		# Draw the pokemon
+		self.starters_list.draw()
+
+	def select_focus_and_advance_to_game(self):
+		# Look through the ten organisms in the experimental list and choose the one from the column...
+		# ...selected
+		for org in self.experimental_list:
+
+			# If the column is equal to the player's choice, choose that organism as focus
+			if self.column_choice == org.column:
+				org = self.focal_organism
+
+
+	def oak_dialogue_pre_game(self):
+		for i in self.oak4_list:
+			self.position_oak_text(i)
+
+			# Note: this has been adjusted to fit the new 10-column histogram
+			i.center_x += 150
+			i.center_y += 5
+
+		# A shorthand
+		oak4 = self.oak4_list
+
+		# Hold's Oak's response to your choice
+		selected_text = []
+
+		### Get Oak to respond based on the column you chose ###
+
+		# If you chose the smallest
+		if self.column_choice == 1:
+			selected_text.append(oak4[0])
+			
+		# Second smallest
+		elif self.column_choice == 2:
+			selected_text.append(oak4[1])
+
+		# Below average size
+		elif (self.column_choice == 3) or (self.column_choice == 4):
+			selected_text.append(oak4[2])
+
+		# Average size
+		elif (self.column_choice == 5) or (self.column_choice == 6):
+			selected_text.append(oak4[3])
+
+		# Above average size
+		elif (self.column_choice == 7) or (self.column_choice == 8):
+			selected_text.append(oak4[4])
+
+		# Second largest or largest
+		elif (self.column_choice == 9) or (self.column_choice == 10):
+			selected_text.append(oak4[5])
+
+
+		# Oak reads "Interesting" and "Let's go" no matter what
+		selected_text.append(oak4[6])
+		selected_text.append(oak4[7])
+
+
+		self.fade_in_sequence(selected_text, 0, 3)
+
+	# Draws everything in the game
 	def on_draw(self):
-		self.draw_charles_darwin()
+		# Start drawing/rendering objects on the screen
+		arcade.start_render()
+
+		
+		# Begin the opening sequence
+		# If the stage is earlier than 2
+		if self.current_state < 2:
+			self.draw_opening_screen()
+
+		# Print the first bout of Professor Oa's dialogue (introduction)
+		if self.current_state >= 2:
+			self.draw_oak_dialogue_1()
+
+		# Begin Professor Oak's dialogue about choosing a species
+		if self.current_state >= 4:
+			self.draw_species_selection_text()
+
+		if self.current_state == 6:
+			self.start_game = True
+			self.increment_scene()
+
+		if self.start_game == True:
+			self.draw_game()
+			
+
+
+
+	def advance_to_oak_intro(self):
+		# Increment to the oak intro
+		self.increment_scene()
+
+		# Play the select sound
+		self.select.play()
+		# Fade music as you transition into stage 2
+		mixer.music.fadeout(3000)
+		# Load the pokemon medley for Professor Oak's big entry
+		medley = mixer.music.load(self.pokemon_medley)
+		
+
+############ TURN MUSIC BACK ON WHEN DEBUGGING IS DONE (BE SURE TO CHECK KEYPRESS TOO!) ##########
+		#mixer.music.play(-1)
+
+################### MOUSE COMMANDS #####################
+
+	def on_mouse_press(self, x, y, button, modifiers):
+		# If we're in stage four...
+		if self.current_state == 4:
+			# Check if left mouse button was used
+			if button == arcade.MOUSE_BUTTON_LEFT:
+
+				# Checks to see if each of the three pokemon was selected by the mouse
+				bulbasaur_check = self.starters_list[0].collides_with_point((x, y))
+				charmander_check = self.starters_list[1].collides_with_point((x, y))
+				squirtle_check = self.starters_list[2].collides_with_point((x, y))
+
+				# If there's not yet a starter chosen...
+				if len(self.starter_string) < 1:
+					if bulbasaur_check == True:
+						
+						# If bulbasaur was chosen, change the string and starter image
+						self.starter_organism = self.starter_organism_dict["bulbasaur"]
+						
+						# Changes the starter string to reflect bulbasaur
+						self.starter_string = "bulbasaur"
+
+						# Play the select sound when chosen
+						self.select.play()
+						
+					# If charmander was chosen, change the starter string and starter image
+					elif charmander_check == True:
+
+						# If charmander was chosen, change the string and starter image
+						self.starter_organism = self.starter_organism_dict["charmander"]
+
+						# Changes the starter string to reflect charmander
+						self.starter_string = "charmander"
+
+						# Play the select sound when chosen
+						self.select.play()
+
+					elif squirtle_check == True:
+
+						# If squirtle was chosen, change the string and starter image
+						self.starter_organism = self.starter_organism_dict["squirtle"]
+
+						# Changes the starter string to reflect squirtle
+						self.starter_string = "squirtle"
+
+						# Plays the select noise if they were chosen
+						self.select.play()
+			
+		# Checks to see if we're in the right phase for choosing a focus
+		if self.current_state == 5:
+
+			# Only do this if a choice hasn't already been made
+			if self.column_choice == 0:
+
+				# Looks through the histogram list to see if any sprite has been selected
+				for i in self.histogram_list:
+					# Makes a variable that returns a boolean (True/False) that says whether or not
+					# the indiividual has been selected
+					new_check = i.collides_with_point((x, y))
+
+					# If the organism is selected, play a sound
+					if new_check == True:
+
+						# Play the select noise
+						self.select.play()
+
+						# Sets the player's choice equal to the column the organism is in
+						self.column_choice = i.column
+						print("Picked a focus!")
+
+
+                    
+
+################## KEYBOARD COMMANDS ######################
+	def on_key_press(self, key, modifiers):
+		if self.current_state == 1:
+			# Press either enter or escape to advance
+			if (key == arcade.key.ESCAPE) or (key == arcade.key.ENTER):
+			
+				# Increment the scene
+				self.increment_scene()
+				# Begin Professor Oak's intro
+				self.advance_to_oak_intro()
+				# Play music on a loop
+				
+		############ TURN MUSIC BACK ON WHEN DEBUGGING IS DONE ##########
+
+				#mixer.music.play(-1)
+
+		# This is intended to allow the user to use enter or escape to skip scenes
+		if (self.current_state == 3):
+			# If escape is pressed, skip ahead
+			if (key == arcade.key.ESCAPE):
+				self.increment_scene()
+
+		# Let the player hit enter to advance to scene five to prevent dialogue overlap
+		if (self.current_state == 4) or (self.current_state == 5):
+
+			if (key == arcade.key.ENTER):
+				# Advance the scene on enter key-press
+				self.increment_scene()
+
+		# If we're currently in-game
+		if self.current_state == 7:
+			# When the "down" key is pressed
+			if key == arcade.key.DOWN or key == arcade.key.S:
+				# Go down (if applicable) at a speed equal to the constant set at the beginning
+				for org in self.player_list:
+					org.change_y = -int(ORGANISM_MEAN_MOVEMENT_SPEED)
+
+			# When the left key is pressed
+			if key == arcade.key.LEFT or key == arcade.key.A:
+				for org in self.player_list:
+					# Go right at a speed equal to the constant set at the beginning
+					org.change_x = -int(ORGANISM_MEAN_MOVEMENT_SPEED)
+					org.set_texture(TEXTURE_LEFT)
+
+			# When the right key is pressed
+			if key == arcade.key.RIGHT or key == arcade.key.D:
+				self.organism_var5_sprite.set_texture(1)
+				for org in self.player_list:
+					# Go right at a speed equal to the constant set at the beginning
+					org.change_x = int(ORGANISM_MEAN_MOVEMENT_SPEED)
+					#org.set_texture(TEXTURE_RIGHT)
+
+
+
+
+
+	def draw_game(self):
+        # NOTE: THIS IS WORKING TO PRODUCE EXTINCTION IN THE MIDDLE OF THE SCREEN!
+
+        # Restart the rendering process
+		arcade.start_render()
+
+		# Uses "current music" as a switch to check and see if you're already playing game music
+		# If you aren't, play it.  If you aren't, don't do anything.
+		# Also, don't play music if the level is over.
+		if (self.current_music != self.game_music) and (self.level_complete == False):
+		    
+		    # Flip the switch so this doesn't happen again
+		    self.current_music = self.game_music
+		    
+		    # Load the game music
+		    mixer.music.load(self.game_music)
+
+		    # Play the music on repeat
+		    mixer.music.play(-1)
+
+		    # First thing we do in game is set the background color
+		    arcade.set_background_color((230, 143, 255))
+
+		# Get the current dimensions of the viewport
+		new_viewport = arcade.get_viewport()
+
+		# Creates text to keep us updated on the mean of the population
+		mean_text = f"Average size: {str(pop_keeper.mean_phenotypic_trait_value_list[self.level-1])[:4]}"
+		
+		# Creates text to keep us updated on the variance in the population
+		var_text = f"Additive genetic variance: {str(pop_keeper.additive_genetic_variance_list[self.level-1])[:4]}"
+
+		# Draws mean text
+		arcade.draw_text(mean_text, new_viewport[0] + 450, new_viewport[2] + 500, 
+		                 arcade.csscolor.WHITE, 10)
+
+		# Draws variance text
+		arcade.draw_text(var_text, new_viewport[0] + 450, new_viewport[2] + 480, 
+		                 arcade.csscolor.WHITE, 10)
+
+		
+		#Draw all the walls and obstacles
+		self.wall_list.draw()
+		
+		# Draw all players
+		self.player_list.draw()
+
+		# Draw all enemies
+		self.enemy_list.draw()
+
+		# Draw darwin (he's the flag at the end)
+		self.darwin_list.draw()
+
+		# Checks to see if you're extinct
+		if self.extinction:
+			# Creates text that indicates Extinction
+			extinction_text = f"EXTINCTION!"
+
+			# Draws extinction text
+			arcade.draw_text(extinction_text, 100 + self.view_left, 300 + self.view_bottom, 
+ 				arcade.csscolor.WHITE, 60)
+
+		if self.making_histogram == True:
+		    
+
+			new_viewport = arcade.get_viewport()
+
+
+			if self.honeymoon_ready == True:
+				self.heart_list.draw()
+
+			low_var_base_x = new_viewport[0]
+
+			if self.hist_coords_given == False:
+		        
+				self.give_hist_coordinates_new(new_viewport)
+				self.hist_coords_given = True
+
+
+			for i in self.experimental_list:
+				i.point = ""
+				i.paired_x = False
+				i.paired_y = False
+				i.faded_in = False
+				i.mating_point = False
+				i.i_am_focal = False
+				i.draw()
+		    
+		    
+
+		    
+			self.calculate_losses()
+
+		    
+			if self.selection_calculated == False:
+				
+				self.get_change_after_selection()
+				self.selection_calculated = True
+
+
+			if self.prof_oak_key_pressed_1 == True:
+		            
+				self.prof_oak_dialogue = True
+				if self.prof_oak_dialogue == True:
+					self.draw_prof_oak()
+					for message in self.oak4_list:
+						self.position_oak_text(message)
+		            
+		    
+		    
+			if self.level_complete and self.go_to_next_level:
+		        
+				self.start_new_level(self.level)
+
+
+
+	def update(self, delta_time):
+		# Update all players first
+		for player_engine in self.player_physics_engines_list:
+			player_engine.update()
+
+		# Update all physics lists at once, but only if in stage 4 or later
+		#if self.current_state >= 4:
+			#for engine in self.master_physics_engine_list:
+				#engine.update()
 
 # Main method of the game; calls set-up initially 
 # Call set-up again to run another level
