@@ -21,7 +21,18 @@ bulbasaur_scaling = 0.01
 charmander_scaling = 0.01
 squirtle_scaling = 0.02
 
-# Constants
+# Creates a dictionary to easily access the scale values
+scale_dict = {
+	"bulbasaur" : bulbasaur_scaling,
+	"charmander" : charmander_scaling,
+	"squirtle" : squirtle_scaling
+
+}
+
+# Sets a scalar constant for variance (otherwise, characters get too big/small)
+var_scalar = 0.01
+
+# Constants for screen
 SCREEN_WIDTH = 1500
 SCREEN_HEIGHT = 1200
 SCREEN_TITLE = "Jake's Platformer"
@@ -691,21 +702,39 @@ class MyGame(arcade.Window):
 	def define_all_ten_sprites_images(self):
 
 
+			### Generates a sprite for each level of variation in the population ###
 
+			# Will lose 2 std_dev from mean
 	        self.organism_var1_sprite = arcade.Sprite(self.starter_organism)
+
+	        # Will lose 1.5 std_dev from mean
 	        self.organism_var2_sprite = arcade.Sprite(self.starter_organism)
+
+	        # Will lose 1 std_dev from mean
 	        self.organism_var3_sprite = arcade.Sprite(self.starter_organism)
+
+	        # Will lose 0.5 std_dev from mean
 	        self.organism_var4_sprite = arcade.Sprite(self.starter_organism)
+
+	        # Will lose 0.25 std_dev from mean
 	        self.organism_var5_sprite = arcade.Sprite(self.starter_organism)
+
+	        # Will gain 0.25 std_dev from mean
 	        self.organism_var6_sprite = arcade.Sprite(self.starter_organism)
+
+	        # Will gain 0.5 std_dev from mean
 	        self.organism_var7_sprite = arcade.Sprite(self.starter_organism)
+
+	        # Will gain 1 std_dev from mean
 	        self.organism_var8_sprite = arcade.Sprite(self.starter_organism)
+
+	        # Will gain 1.5 std_dev from mean
 	        self.organism_var9_sprite = arcade.Sprite(self.starter_organism)
+
+	        # Will gain 2 std_dev from mean
 	        self.organism_var10_sprite = arcade.Sprite(self.starter_organism)
 
-
-
-
+	        # Append all to experimental list
 	        self.experimental_list.append(self.organism_var1_sprite)
 	        self.experimental_list.append(self.organism_var2_sprite)
 	        self.experimental_list.append(self.organism_var3_sprite)
@@ -717,37 +746,184 @@ class MyGame(arcade.Window):
 	        self.experimental_list.append(self.organism_var9_sprite)
 	        self.experimental_list.append(self.organism_var10_sprite)
 
+	        # Check to see which starter was chosen and change textures
 	        for i in self.experimental_list:
-	            i.invincibility_timer = 0
+
+	            # If starter is bulbasaur, give bulbasaur textures
 	            if self.starter_string == "bulbasaur":
+	            	# Append left image
 	                texture = arcade.load_texture("images/bulbasaur_left.png")
 	                i.textures.append(texture)
+
+	                # Append right image
 	                texture = arcade.load_texture("images/bulbasaur_right.png")
 	                i.textures.append(texture)
 	                print("We're bulbasaurs with our textures appended!")
+
+	            # If starter is charmander, give charmander textures
 	            elif self.starter_string == "charmander":
+	            	# Append left image
 	                texture = arcade.load_texture("images/charmander_left.png")
 	                i.textures.append(texture)
+
+	                # Append right image
 	                texture = arcade.load_texture("images/charmander_right.png")
 	                i.textures.append(texture)
 	                print("We're charmanders with our textures appended!")
+	            
+	            # If starter is squirtle, give squirtle textures
 	            elif self.starter_string == "squirtle":
+	            	# Append left image
 	                texture = arcade.load_texture("images/squirtle_left.png")
 	                i.textures.append(texture)
+
+	                # Append right image
 	                texture = arcade.load_texture("images/squirtle_right.png")
 	                i.textures.append(texture)
 	                print("We're squirtles with our textures appended!")
-	            print("Length of textures:", len(i.textures))
+
 	            
-
-
-
-	            i.invincible = False
-	            #i.alpha = 50
-	            i.physics_engine = ""
+	           
+	            # Establishes that the organism, by default, isn't dead
 	            i.dead = False
 
 
+############## DEFINE_ALL_TEN_SPRITES METHOD HAS BEEN CLEANED #############
+
+	# Set everyone to their proper scalar values; note that this won't run properly
+	# until a starter has been selected
+	def scale_everyone(self):
+
+		if self.starter_string:
+			
+			# Establish which type of scaling is appropriate by checking the starter string...
+			# ...and retrieving the right scale
+			appropriate_mean_scale = scale_dict[self.starter_string]
+
+			# Set character scaling equal to the mean times the scalar constant
+			self.CHARACTER_SCALING = appropriate_scale * starting_mean
+
+			# Prevents the variance from making characters overtake the screen
+			self.var = self.var * var_scalar
+
+			# Set the standard deviation equal to the square root of the variance
+			self.std_dev = numpy.sqrt(self.var)
+
+			# Give each character its appropriate amount of deviation from the mean
+			self.organism_var1_sprite.scale = self.CHARACTER_SCALING - (self.std_dev*2)
+			self.organism_var2_sprite.scale = self.CHARACTER_SCALING - (self.std_dev*1.5)
+			self.organism_var3_sprite.scale = self.CHARACTER_SCALING - (self.std_dev)
+			self.organism_var4_sprite.scale = self.CHARACTER_SCALING - (self.std_dev*0.5)
+			self.organism_var5_sprite.scale = self.CHARACTER_SCALING - (self.std_dev*0.25)
+			self.organism_var6_sprite.scale = self.CHARACTER_SCALING + (self.std_dev*0.25)
+			self.organism_var7_sprite.scale = self.CHARACTER_SCALING + (self.std_dev*0.5)
+			self.organism_var8_sprite.scale = self.CHARACTER_SCALING + (self.std_dev*1)
+			self.organism_var9_sprite.scale = self.CHARACTER_SCALING + (self.std_dev*1.5)
+			self.organism_var10_sprite.scale = self.CHARACTER_SCALING + (self.std_dev*2)
+
+	        # Sets all textures in each organism equal to the scale of the organism
+			for org in self.experimental_list:
+				for texture in org.textures:
+					texture.scale = org.scale
+	        
+	        # If the scale goes below zero, change it to something teensy but positive
+			for i in range(len(self.experimental_list)-1):
+				if self.experimental_list[i].scale <= 0:
+					self.experimental_list[i].scale = 0.000000001
+				print("Scale for var ", i+1,":", self.experimental_list[i].scale)
+
+############## SCALE EVERYONE METHOD HAS BEEN CLEANED #############
+    
+########################### METHODS RELATED TO FADING IN AND OUT ##################################
+
+
+	# A "fade-in-and-out" method; ### CHANGE NAME ONCE EVERYTHING'S WORKING ###
+	def fade_in_and_out_better(self, target, rate_in=1, rate_out=1):
+		# If the target isn't already fading-out AND is completely transparent:
+		if not ((target.fading_out == True) and (target.alpha == 0)):
+			# If the target IS still fading in but is completely opaque
+			# (i.e. the target hasn't begun yet):
+			if (target.fading_in == True) and (target.alpha == 255):
+				# Change its opacity to zero so that it can begin the process
+			    target.alpha = 0
+
+			# If the target's opacity is zero and it's fading in, starting increasing opacity
+			if target.fading_in == True:
+			    target.alpha += rate_in
+
+			# If the target is still fading in and the opacity is over 240, start fading out
+			if (target.fading_in == True) and target.alpha > 240:
+			    target.fading_in = False
+			    target.fading_out = True
+
+			# If the target is fading out but still has some opacity (>0), reduce opacity
+			if (target.fading_out == True) and (target.alpha > 0):
+			    target.alpha -= rate_out
+
+			# If the target is fading out and its opacity has fallen to or below zero, keep it at zero
+			elif (target.fading_out == True) and (target.alpha <= 0):
+			    target.alpha = 0
+
+			# Only draw the target when its opacity is greater than zero (to save on memory) 
+			if target.alpha > 0:
+			    target.draw()
+
+
+
+
+################# FADE IN AND OUT BETTER METHOD HAS BEEN CLEANED ##############
+
+
+
+
+	def fade_in_sequence(self, target_list, start_range, end_range, rate_in=1, rate_out=1, lower_threshold=100, upper_threshold=255):
+		# Start by fading in-and-out the first thing in the list
+		# If the start range is zero, just begin with zero
+		if start_range == 0:
+			self.fade_in_and_out_better(target_list[0], rate_in, rate_out)
+
+		# If the start range is greater than zero, start one before the beginning of the start range
+		elif start_range > 0:
+			self.fade_in_and_out_better(target_list[start_range-1], rate_in, rate_out)
+
+		# For everything from the start range to the end range:
+		for i in range(len(target_list[start_range:end_range])):
+
+			# If the target isn't already at zero opacity and it IS still fading out:
+			if not ((target_list[i].alpha == 0) and (target_list[i].fading_out == True)):
+
+				# If the PREVIOUS target is now below the upper threshold of opacity and is fading out:
+				if (target_list[i-1].alpha < upper_threshold) and (target_list[i-1].fading_out == True):
+
+					# Begin fading out the target
+					self.fade_in_and_out_better(target_list[i], rate_in, rate_out)
+				
+				# If the target is fading out OR its opacity is not at full, begin the process
+				elif (target_list[i].fading_out == True) or (target_list[i].alpha != 255):
+					self.fade_in_and_out_better(target_list[i], rate_in, rate_out)
+
+
+############################## METHODS RELATED TO DRAWING DIALOGUE CHARACTERS ##########################
+
+	def draw_charles_darwin(self):
+		# Get the current viewport
+		starting_viewport = arcade.get_viewport()
+
+		# Set darwin equal to his standard (default) texture (which is to the left)
+		self.darwin_sprite.set_texture(0)
+
+		# Set Darwin's coordinates on the screen (top left corner of the viewport)
+		self.darwin_sprite.center_x = starting_viewport[0] + 100
+		self.darwin_sprite.center_y = starting_viewport[2] + 500
+
+		# Draw Darwin
+		self.darwin_sprite.draw()
+
+
+
+
+	def on_draw(self):
+		self.draw_charles_darwin()
 
 # Main method of the game; calls set-up initially 
 # Call set-up again to run another level
